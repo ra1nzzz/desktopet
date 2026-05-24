@@ -4,7 +4,7 @@
 灵犀文件精灵 v7.2 - ULW per-pixel alpha + windnd
 """
 
-import os, sys, json, shutil, hashlib, datetime, webbrowser, math, time, random
+import os, sys, json, shutil, hashlib, datetime, webbrowser, math, time, random, re
 import ctypes
 from ctypes import wintypes
 import tkinter as tk
@@ -93,7 +93,23 @@ STATE_APNG = {
     HAPPY: "happy.apng", SLEEPING: "sleeping.apng",
     SURPRISED: "surprised.apng", SHY: "shy.apng",
 }
-
+SCREENSHOT_RE = re.compile(
+    r'^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}'
+    r'|^Screenshot[_\s]'
+    r'|^微信截图'
+    r'|^微信图片_\d{8}'
+    r'|^QQ截图'
+    r'|^屏幕截图'
+    r'|^Snipaste'
+    r'|^截屏'
+    r'|^捕获'
+    r'|^[Cc]apture'
+    r'|^[Ss]creenshot'
+    r'|^clip_'
+    r'|^paste_'
+    r'|^新建 位图图像',
+    re.IGNORECASE,
+)
 
 class ApngLoader:
     def __init__(self, scale=1.0):
@@ -624,8 +640,8 @@ def move_to_recycle(filepath):
 def classify_file(filepath, config):
     ext = os.path.splitext(filepath)[1].lower()
     name = os.path.basename(filepath).lower()
-    if ext in (".png", ".jpg", ".jpeg", ".bmp", ".webp"):
-        if any(p in name for p in ["screenshot", "截屏", "截图", "录屏", "屏幕"]):
+    if ext in (".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif", ".tiff", ".tif", ".svg", ".ico"):
+        if SCREENSHOT_RE.search(name):
             return "截图", "recycle"
         return "图片", "archive"
     if ext in (".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv"):

@@ -1,11 +1,53 @@
 # -*- coding: utf-8 -*-
-"""基于 index_preview.html 样式生成 index.html，增加筛选修复+stat-card点击+定位按钮"""
-import base64, os, json
+"""基于 index_preview.html 样式生成 index.html
+- 截图/图片智能区分（时间戳、截图关键词）
+- 全量渲染 + JS分页（每页200条）
+- stat-card点击筛选 + 下拉筛选双向联动
+- 定位按钮（已归档文件）
+"""
+import base64, os, json, re, hashlib, datetime
 
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "filedb.json")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(SCRIPT_DIR, "filedb.json")
 ARCHIVE_DIR = r"D:\lingxi-file"
 ARCHIVE_URL = "D:/lingxi-file"
-DISPLAY_LIMIT = 500
+PAGE_SIZE = 200
+
+SCREENSHOT_RE = re.compile(
+    r'^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}'
+    r'|^Screenshot[_\s]'
+    r'|^微信截图'
+    r'|^微信图片_\d{8}'
+    r'|^QQ截图'
+    r'|^屏幕截图'
+    r'|^Snipaste'
+    r'|^截屏'
+    r'|^捕获'
+    r'|^[Cc]apture'
+    r'|^[Ss]creenshot'
+    r'|^clip_'
+    r'|^paste_'
+    r'|^新建 位图图像',
+    re.IGNORECASE,
+)
+
+EXT_CAT = {
+    ".png": "图片", ".jpg": "图片", ".jpeg": "图片", ".gif": "图片", ".bmp": "图片",
+    ".webp": "图片", ".svg": "图片", ".ico": "图片", ".tiff": "图片", ".tif": "图片",
+    ".mp4": "视频", ".avi": "视频", ".mkv": "视频", ".mov": "视频", ".wmv": "视频",
+    ".flv": "视频", ".webm": "视频",
+    ".mp3": "音频", ".wav": "音频", ".flac": "音频", ".ogg": "音频", ".aac": "音频",
+    ".m4a": "音频",
+    ".pdf": "文档", ".doc": "文档", ".docx": "文档", ".xls": "文档", ".xlsx": "文档",
+    ".ppt": "文档", ".pptx": "文档", ".txt": "文档", ".csv": "文档", ".md": "文档",
+    ".rtf": "文档",
+    ".zip": "压缩包", ".rar": "压缩包", ".7z": "压缩包", ".tar": "压缩包", ".gz": "压缩包",
+    ".exe": "安装包", ".msi": "安装包",
+    ".py": "代码", ".js": "代码", ".html": "代码", ".css": "代码", ".json": "代码",
+    ".java": "代码", ".cpp": "代码", ".c": "代码", ".h": "代码", ".bat": "代码",
+    ".ps1": "代码", ".sh": "代码",
+    ".psd": "设计稿", ".ai": "设计稿", ".sketch": "设计稿",
+}
 
 CAT_META = {
     "截图": ("\U0001f4f8", "#ef4444"), "图片": ("\U0001f5bc\ufe0f", "#8b5cf6"),
@@ -15,51 +57,59 @@ CAT_META = {
     "设计稿": ("\U0001f3a8", "#d946ef"), "其他": ("\U0001f4c1", "#94a3b8"),
 }
 
+
+def classify(name):
+    ext = os.path.splitext(name)[1].lower()
+    base = EXT_CAT.get(ext, "其他")
+    if base == "图片" and SCREENSHOT_RE.search(name):
+        return "截图"
+    return base
+
+
 def fmt_size(sz):
-    if sz > 1073741824: return f"{sz/1073741824:.1f} GB"
-    if sz > 1048576: return f"{sz/1048576:.1f} MB"
-    if sz > 1024: return f"{sz/1024:.1f} KB"
-    return f"{sz} B"
+    if sz > 1073741824: return "%.1f GB" % (sz / 1073741824)
+    if sz > 1048576: return "%.1f MB" % (sz / 1048576)
+    if sz > 1024: return "%.1f KB" % (sz / 1024)
+    return "%d B" % sz
+
 
 def main():
     with open(DB_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
     records = sorted(data, key=lambda r: r.get("timestamp", ""), reverse=True)
-
     total_size = sum(r.get("file_size", 0) for r in records)
     cats = {}
     for rec in records:
-        c = rec.get("category", "\u5176\u4ed6")
+        c = rec.get("category", "其他")
         if c not in cats: cats[c] = {"count": 0, "size": 0}
         cats[c]["count"] += 1
         cats[c]["size"] += rec.get("file_size", 0)
 
-    # === stat cards ===
+    # stat cards
     sc = []
     for cn, info in sorted(cats.items(), key=lambda x: -x[1]["count"]):
         emoji, color = CAT_META.get(cn, ("\U0001f4c1", "#94a3b8"))
         sc.append(
-            '        <div class="stat-card" data-cat="' + cn + '" style="border-left: 3px solid ' + color + '">\n'
-            '            <div class="stat-icon">' + emoji + '</div>\n'
-            '            <div class="stat-info">\n'
-            '                <div class="stat-name">' + cn + '</div>\n'
-            '                <div class="stat-detail">' + str(info["count"]) + ' \u4e2a\u6587\u4ef6 \xb7 ' + fmt_size(info["size"]) + '</div>\n'
-            '            </div>\n'
-            '        </div>'
+            '        <div class="stat-card" data-cat="' + cn + '" style="border-left: 3px solid ' + color + '">'
+            '<div class="stat-icon">' + emoji + '</div>'
+            '<div class="stat-info">'
+            '<div class="stat-name">' + cn + '</div>'
+            '<div class="stat-detail">' + str(info["count"]) + ' 个文件 · ' + fmt_size(info["size"]) + '</div>'
+            '</div></div>'
         )
-    stat_cards_html = "\n".join(sc)
+    stat_cards = "\n".join(sc)
 
-    # === cat options ===
+    # cat options
     co = []
     for cn, info in sorted(cats.items(), key=lambda x: -x[1]["count"]):
         emoji, _ = CAT_META.get(cn, ("\U0001f4c1", "#94a3b8"))
         co.append('<option value="' + cn + '">' + emoji + ' ' + cn + ' (' + str(info["count"]) + ')</option>')
-    cat_options_html = "".join(co)
+    cat_options = "".join(co)
 
-    # === rows ===
+    # rows (full, no limit)
     rows = []
-    for rec in records[:DISPLAY_LIMIT]:
-        cat = rec.get("category", "\u5176\u4ed6")
+    for rec in records:
+        cat = rec.get("category", "其他")
         name = rec.get("original_name", "")
         date = rec.get("date", "")
         action = rec.get("action", "")
@@ -67,349 +117,166 @@ def main():
         sz = rec.get("file_size", 0)
         emoji, color = CAT_META.get(cat, ("\U0001f4c1", "#94a3b8"))
         badge_cls = "badge-recycle" if action == "recycle" else "badge-archive"
-        badge_txt = "\u5df2\u56de\u6536" if action == "recycle" else "\u5df2\u5f52\u6863"
-        path_short = os.path.basename(dest) if dest and dest != "(\u5df2\u56de\u6536)" else "(\u5df2\u56de\u6536)"
-        locate_btn = ""
-        if dest and dest != "(\u5df2\u56de\u6536)" and action == "archive":
-            encoded = base64.b64encode(dest.encode("utf-8")).decode("ascii")
-            locate_btn = ' <a class="btn-locate" href="lingxi-locate://' + encoded + '" title="\u5b9a\u4f4d">\u5b9a\u4f4d</a>'
+        badge_txt = "已回收" if action == "recycle" else "已归档"
+        path_short = os.path.basename(dest) if dest and dest != "(已回收)" else "(已回收)"
+        locate = ""
+        if dest and dest != "(已回收)" and action == "archive":
+            enc = base64.b64encode(dest.encode("utf-8")).decode("ascii")
+            locate = ' <a class="btn-locate" href="lingxi-locate://' + enc + '">定位</a>'
         rows.append(
-            '        <tr>\n'
-            '            <td><span class="cat-dot" style="background:' + color + '"></span> ' + emoji + ' ' + cat + '</td>\n'
-            '            <td title="' + name + '">' + name + '</td>\n'
-            '            <td>' + date + '</td>\n'
-            '            <td>' + fmt_size(sz) + '</td>\n'
-            '            <td><span class="badge ' + badge_cls + '">' + badge_txt + '</span>' + locate_btn + '</td>\n'
-            '            <td class="path-cell" title="' + dest + '">' + path_short + '</td>\n'
-            '        </tr>'
+            '<tr>'
+            '<td data-cat="' + cat + '"><span class="cat-dot" style="background:' + color + '"></span> ' + emoji + ' ' + cat + '</td>'
+            '<td title="' + name + '">' + name + '</td>'
+            '<td>' + date + '</td>'
+            '<td>' + fmt_size(sz) + '</td>'
+            '<td><span class="badge ' + badge_cls + '">' + badge_txt + '</span>' + locate + '</td>'
+            '<td class="path-cell" title="' + dest + '">' + path_short + '</td>'
+            '</tr>'
         )
     rows_html = "\n".join(rows)
 
-    # === footer ===
-    if len(records) > DISPLAY_LIMIT:
-        footer_text = "\u7075\u7280\u6587\u4ef6\u7cbe\u7075 \xb7 LingXi Droplet \xb7 \u663e\u793a\u524d" + str(DISPLAY_LIMIT) + "\u6761 / \u5171" + str(len(records)) + "\u6761 \xb7 \u6570\u636e\u5b58\u50a8\u4e8e\u672c\u5730 " + ARCHIVE_DIR
-    else:
-        footer_text = "\u7075\u7280\u6587\u4ef6\u7cbe\u7075 \xb7 LingXi Droplet \xb7 \u6570\u636e\u5b58\u50a8\u4e8e\u672c\u5730 " + ARCHIVE_DIR
-
     html = (
-        '<!DOCTYPE html>\n'
-        '<html lang="zh-CN">\n'
-        '<head>\n'
-        '<meta charset="UTF-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        '<title>\u7075\u7280\u6587\u4ef6\u7cbe\u7075 - \u6587\u4ef6\u5bfc\u822a</title>\n'
+        '<!DOCTYPE html>\n<html lang="zh-CN"><head>\n'
+        '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">\n'
+        '<title>灵犀文件精灵 - 文件导航</title>\n'
         '<style>\n'
-        '  :root {\n'
-        '    --bg: #0f1117;\n'
-        '    --bg2: #1a1d27;\n'
-        '    --bg3: #242837;\n'
-        '    --fg: #e2e8f0;\n'
-        '    --fg2: #94a3b8;\n'
-        '    --accent: #6366f1;\n'
-        '    --accent2: #818cf8;\n'
-        '    --border: #2d3348;\n'
-        '    --radius: 12px;\n'
-        '  }\n'
-        '  * { margin: 0; padding: 0; box-sizing: border-box; }\n'
-        '  body {\n'
-        '    font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;\n'
-        '    background: var(--bg);\n'
-        '    color: var(--fg);\n'
-        '    line-height: 1.6;\n'
-        '    min-height: 100vh;\n'
-        '  }\n'
-        '  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }\n'
-        '  .header {\n'
-        '    text-align: center;\n'
-        '    margin-bottom: 40px;\n'
-        '    padding: 40px 0;\n'
-        '    background: linear-gradient(135deg, var(--bg2), var(--bg3));\n'
-        '    border-radius: var(--radius);\n'
-        '    border: 1px solid var(--border);\n'
-        '  }\n'
-        '  .header h1 {\n'
-        '    font-size: 32px;\n'
-        '    font-weight: 700;\n'
-        '    background: linear-gradient(135deg, var(--accent), #a78bfa);\n'
-        '    -webkit-background-clip: text;\n'
-        '    -webkit-text-fill-color: transparent;\n'
-        '    margin-bottom: 8px;\n'
-        '  }\n'
-        '  .header p { color: var(--fg2); font-size: 14px; }\n'
-        '  .summary {\n'
-        '    display: flex;\n'
-        '    gap: 24px;\n'
-        '    margin-bottom: 32px;\n'
-        '    flex-wrap: wrap;\n'
-        '  }\n'
-        '  .summary-card {\n'
-        '    flex: 1;\n'
-        '    min-width: 180px;\n'
-        '    background: var(--bg2);\n'
-        '    border: 1px solid var(--border);\n'
-        '    border-radius: var(--radius);\n'
-        '    padding: 20px;\n'
-        '    text-align: center;\n'
-        '  }\n'
-        '  .summary-card .num {\n'
-        '    font-size: 36px;\n'
-        '    font-weight: 800;\n'
-        '    color: var(--accent2);\n'
-        '  }\n'
-        '  .summary-card .label { color: var(--fg2); font-size: 13px; margin-top: 4px; }\n'
-        '  .stats-grid {\n'
-        '    display: grid;\n'
-        '    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));\n'
-        '    gap: 12px;\n'
-        '    margin-bottom: 32px;\n'
-        '  }\n'
-        '  .stat-card {\n'
-        '    display: flex;\n'
-        '    align-items: center;\n'
-        '    gap: 14px;\n'
-        '    background: var(--bg2);\n'
-        '    border: 1px solid var(--border);\n'
-        '    border-radius: var(--radius);\n'
-        '    padding: 16px 20px;\n'
-        '    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;\n'
-        '    cursor: pointer;\n'
-        '  }\n'
-        '  .stat-card:hover {\n'
-        '    transform: translateY(-2px);\n'
-        '    box-shadow: 0 8px 24px rgba(0,0,0,0.3);\n'
-        '  }\n'
-        '  .stat-card.active {\n'
-        '    border-color: var(--accent);\n'
-        '    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(99,102,241,0.2);\n'
-        '  }\n'
-        '  .stat-card.dimmed { opacity: 0.4; }\n'
-        '  .stat-icon { font-size: 28px; }\n'
-        '  .stat-name { font-weight: 600; font-size: 15px; }\n'
-        '  .stat-detail { color: var(--fg2); font-size: 12px; }\n'
-        '  .toolbar {\n'
-        '    display: flex;\n'
-        '    gap: 12px;\n'
-        '    margin-bottom: 20px;\n'
-        '    flex-wrap: wrap;\n'
-        '    align-items: center;\n'
-        '  }\n'
-        '  .toolbar input, .toolbar select {\n'
-        '    background: var(--bg2);\n'
-        '    border: 1px solid var(--border);\n'
-        '    color: var(--fg);\n'
-        '    padding: 10px 16px;\n'
-        '    border-radius: 8px;\n'
-        '    font-size: 14px;\n'
-        '    outline: none;\n'
-        '    transition: border-color 0.2s;\n'
-        '  }\n'
-        '  .toolbar input:focus, .toolbar select:focus {\n'
-        '    border-color: var(--accent);\n'
-        '  }\n'
-        '  .toolbar input { flex: 1; min-width: 200px; }\n'
-        '  .toolbar select { min-width: 160px; cursor: pointer; }\n'
-        '  .toolbar .btn {\n'
-        '    padding: 10px 20px;\n'
-        '    border-radius: 8px;\n'
-        '    border: 1px solid var(--accent);\n'
-        '    background: var(--accent);\n'
-        '    color: #fff;\n'
-        '    cursor: pointer;\n'
-        '    font-size: 14px;\n'
-        '    font-weight: 500;\n'
-        '    transition: background 0.2s;\n'
-        '  }\n'
-        '  .toolbar .btn:hover { background: var(--accent2); }\n'
-        '  .table-wrap {\n'
-        '    background: var(--bg2);\n'
-        '    border: 1px solid var(--border);\n'
-        '    border-radius: var(--radius);\n'
-        '    overflow: hidden;\n'
-        '  }\n'
-        '  table { width: 100%; border-collapse: collapse; }\n'
-        '  th {\n'
-        '    background: var(--bg3);\n'
-        '    padding: 14px 16px;\n'
-        '    text-align: left;\n'
-        '    font-weight: 600;\n'
-        '    font-size: 13px;\n'
-        '    color: var(--fg2);\n'
-        '    text-transform: uppercase;\n'
-        '    letter-spacing: 0.5px;\n'
-        '    border-bottom: 1px solid var(--border);\n'
-        '  }\n'
-        '  td {\n'
-        '    padding: 12px 16px;\n'
-        '    font-size: 14px;\n'
-        '    border-bottom: 1px solid var(--border);\n'
-        '    max-width: 200px;\n'
-        '    overflow: hidden;\n'
-        '    text-overflow: ellipsis;\n'
-        '    white-space: nowrap;\n'
-        '  }\n'
-        '  tr:last-child td { border-bottom: none; }\n'
-        '  tr:hover td { background: rgba(99, 102, 241, 0.06); }\n'
-        '  .cat-dot {\n'
-        '    display: inline-block;\n'
-        '    width: 8px; height: 8px;\n'
-        '    border-radius: 50%;\n'
-        '    margin-right: 6px;\n'
-        '    vertical-align: middle;\n'
-        '  }\n'
-        '  .badge {\n'
-        '    display: inline-block;\n'
-        '    padding: 2px 10px;\n'
-        '    border-radius: 20px;\n'
-        '    font-size: 11px;\n'
-        '    font-weight: 600;\n'
-        '  }\n'
-        '  .badge-archive { background: rgba(16, 185, 129, 0.15); color: #34d399; }\n'
-        '  .badge-recycle { background: rgba(239, 68, 68, 0.15); color: #f87171; }\n'
-        '  .btn-locate {\n'
-        '    color: var(--accent2);\n'
-        '    text-decoration: none;\n'
-        '    margin-left: 6px;\n'
-        '    padding: 2px 8px;\n'
-        '    border: 1px solid var(--accent);\n'
-        '    border-radius: 4px;\n'
-        '    font-size: 11px;\n'
-        '    cursor: pointer;\n'
-        '    transition: background 0.2s, color 0.2s;\n'
-        '  }\n'
-        '  .btn-locate:hover { background: var(--accent); color: #fff; }\n'
-        '  .path-cell { color: var(--fg2); font-size: 12px; }\n'
-        '  .footer {\n'
-        '    text-align: center;\n'
-        '    margin-top: 48px;\n'
-        '    padding: 24px 0;\n'
-        '    color: var(--fg2);\n'
-        '    font-size: 12px;\n'
-        '    border-top: 1px solid var(--border);\n'
-        '  }\n'
-        '  @media (max-width: 768px) {\n'
-        '    .summary { flex-direction: column; }\n'
-        '    .stats-grid { grid-template-columns: 1fr; }\n'
-        '    .toolbar { flex-direction: column; }\n'
-        '    .toolbar input, .toolbar select { width: 100%; }\n'
-        '    th, td { padding: 10px 12px; font-size: 13px; }\n'
-        '  }\n'
-        '</style>\n'
-        '</head>\n'
-        '<body>\n'
-        '<div class="container">\n'
-        '\n'
-        '  <div class="header">\n'
-        '    <h1>\u7075\u7280\u6587\u4ef6\u7cbe\u7075</h1>\n'
-        '    <p>\u667a\u80fd\u6587\u4ef6\u5206\u7c7b\u5f52\u6863 \xb7 \u62d6\u62fd\u5373\u6574\u7406</p>\n'
-        '  </div>\n'
-        '\n'
-        '  <div class="summary">\n'
-        '    <div class="summary-card">\n'
-        '      <div class="num">' + str(len(records)) + '</div>\n'
-        '      <div class="label">\u7d2f\u8ba1\u5904\u7406\u6587\u4ef6</div>\n'
-        '    </div>\n'
-        '    <div class="summary-card">\n'
-        '      <div class="num">' + str(len(cats)) + '</div>\n'
-        '      <div class="label">\u6587\u4ef6\u5206\u7c7b\u6570</div>\n'
-        '    </div>\n'
-        '    <div class="summary-card">\n'
-        '      <div class="num">' + fmt_size(total_size) + '</div>\n'
-        '      <div class="label">\u5f52\u6863\u603b\u5927\u5c0f</div>\n'
-        '    </div>\n'
-        '  </div>\n'
-        '\n'
-        '  <div class="stats-grid">\n'
-        + stat_cards_html + '\n'
-        '  </div>\n'
-        '\n'
-        '  <div class="toolbar">\n'
-        '    <input type="text" id="search" placeholder="\u641c\u7d22\u6587\u4ef6\u540d..." oninput="filterTable()">\n'
-        '    <select id="catFilter" onchange="filterTable()">\n'
-        '      <option value="\u5168\u90e8">\u5168\u90e8\u5206\u7c7b</option>' + cat_options_html + '\n'
-        '    </select>\n'
-        '    <button class="btn" onclick="location.reload()">\u5237\u65b0</button>\n'
-        '    <button class="btn" style="background:transparent;border-color:var(--border);color:var(--fg2)" onclick="openArchiveDir()">\u6253\u5f00\u5f52\u6863\u76ee\u5f55</button>\n'
-        '  </div>\n'
-        '\n'
-        '  <div class="table-wrap">\n'
-        '    <table>\n'
-        '      <thead>\n'
-        '        <tr>\n'
-        '          <th>\u5206\u7c7b</th>\n'
-        '          <th>\u6587\u4ef6\u540d</th>\n'
-        '          <th>\u65e5\u671f</th>\n'
-        '          <th>\u5927\u5c0f</th>\n'
-        '          <th>\u64cd\u4f5c</th>\n'
-        '          <th>\u5f52\u6863\u8def\u5f84</th>\n'
-        '        </tr>\n'
-        '      </thead>\n'
-        '      <tbody id="fileBody">\n'
-        + rows_html + '\n'
-        '      </tbody>\n'
-        '    </table>\n'
-        '  </div>\n'
-        '\n'
-        '  <div class="footer">\n'
-        '    ' + footer_text + '\n'
-        '  </div>\n'
-        '\n'
+        ':root{--bg:#0f1117;--bg2:#1a1d27;--bg3:#242837;--fg:#e2e8f0;--fg2:#94a3b8;--accent:#6366f1;--accent2:#818cf8;--border:#2d3348;--radius:12px}\n'
+        '*{margin:0;padding:0;box-sizing:border-box}\n'
+        'body{font-family:-apple-system,"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--fg);line-height:1.6;min-height:100vh}\n'
+        '.container{max-width:1200px;margin:0 auto;padding:32px 24px}\n'
+        '.header{text-align:center;margin-bottom:40px;padding:40px 0;background:linear-gradient(135deg,var(--bg2),var(--bg3));border-radius:var(--radius);border:1px solid var(--border)}\n'
+        '.header h1{font-size:32px;font-weight:700;background:linear-gradient(135deg,var(--accent),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}\n'
+        '.header p{color:var(--fg2);font-size:14px}\n'
+        '.summary{display:flex;gap:24px;margin-bottom:32px;flex-wrap:wrap}\n'
+        '.summary-card{flex:1;min-width:180px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;text-align:center}\n'
+        '.summary-card .num{font-size:36px;font-weight:800;color:var(--accent2)}\n'
+        '.summary-card .label{color:var(--fg2);font-size:13px;margin-top:4px}\n'
+        '.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:32px}\n'
+        '.stat-card{display:flex;align-items:center;gap:14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;transition:transform .15s,box-shadow .15s,opacity .15s;cursor:pointer}\n'
+        '.stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}\n'
+        '.stat-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 16px rgba(99,102,241,.2)}\n'
+        '.stat-card.dimmed{opacity:.4}\n'
+        '.stat-icon{font-size:28px}.stat-name{font-weight:600;font-size:15px}.stat-detail{color:var(--fg2);font-size:12px}\n'
+        '.toolbar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center}\n'
+        '.toolbar input,.toolbar select{background:var(--bg2);border:1px solid var(--border);color:var(--fg);padding:10px 16px;border-radius:8px;font-size:14px;outline:none;transition:border-color .2s}\n'
+        '.toolbar input:focus,.toolbar select:focus{border-color:var(--accent)}\n'
+        '.toolbar input{flex:1;min-width:200px}.toolbar select{min-width:160px;cursor:pointer}\n'
+        '.toolbar .btn{padding:10px 20px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:14px;font-weight:500;transition:background .2s}\n'
+        '.toolbar .btn:hover{background:var(--accent2)}\n'
+        '.table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}\n'
+        'table{width:100%;border-collapse:collapse}\n'
+        'th{background:var(--bg3);padding:14px 16px;text-align:left;font-weight:600;font-size:13px;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}\n'
+        'td{padding:12px 16px;font-size:14px;border-bottom:1px solid var(--border);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n'
+        'tr:last-child td{border-bottom:none}tr:hover td{background:rgba(99,102,241,.06)}\n'
+        '.cat-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}\n'
+        '.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}\n'
+        '.badge-archive{background:rgba(16,185,129,.15);color:#34d399}.badge-recycle{background:rgba(239,68,68,.15);color:#f87171}\n'
+        '.btn-locate{color:var(--accent2);text-decoration:none;margin-left:6px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;font-size:11px;cursor:pointer;transition:background .2s,color .2s}\n'
+        '.btn-locate:hover{background:var(--accent);color:#fff}\n'
+        '.path-cell{color:var(--fg2);font-size:12px}\n'
+        '.load-more{text-align:center;padding:20px}\n'
+        '.footer{text-align:center;margin-top:48px;padding:24px 0;color:var(--fg2);font-size:12px;border-top:1px solid var(--border)}\n'
+        '@media(max-width:768px){.summary{flex-direction:column}.stats-grid{grid-template-columns:1fr}.toolbar{flex-direction:column}.toolbar input,.toolbar select{width:100%}th,td{padding:10px 12px;font-size:13px}}\n'
+        '</style></head><body>\n<div class="container">\n'
+        '<div class="header"><h1>灵犀文件精灵</h1><p>智能文件分类归档 · 拖拽即整理</p></div>\n'
+        '<div class="summary">'
+        '<div class="summary-card"><div class="num">' + str(len(records)) + '</div><div class="label">累计处理文件</div></div>'
+        '<div class="summary-card"><div class="num">' + str(len(cats)) + '</div><div class="label">文件分类数</div></div>'
+        '<div class="summary-card"><div class="num">' + fmt_size(total_size) + '</div><div class="label">归档总大小</div></div>'
         '</div>\n'
-        '\n'
+        '<div class="stats-grid">\n' + stat_cards + '\n</div>\n'
+        '<div class="toolbar">'
+        '<input type="text" id="search" placeholder="搜索文件名..." oninput="filterTable()">'
+        '<select id="catFilter" onchange="filterTable()"><option value="全部">全部分类</option>' + cat_options + '</select>'
+        '<button class="btn" onclick="location.reload()">刷新</button>'
+        '<button class="btn" style="background:transparent;border-color:var(--border);color:var(--fg2)" onclick="openArchiveDir()">打开归档目录</button>'
+        '</div>\n'
+        '<div class="table-wrap"><table><thead><tr>'
+        '<th>分类</th><th>文件名</th><th>日期</th><th>大小</th><th>操作</th><th>归档路径</th>'
+        '</tr></thead><tbody id="fileBody">' + rows_html + '</tbody></table></div>\n'
+        '<div id="loadMoreWrap" class="load-more" style="display:none">'
+        '<button class="btn" onclick="showMore()">加载更多</button>'
+        '</div>\n'
+        '<div class="footer">灵犀文件精灵 · LingXi Droplet · 共' + str(len(records)) + '个文件 · 数据存储于本地 ' + ARCHIVE_DIR + '</div>\n'
+        '</div>\n'
         '<script>\n'
-        "function filterTable(catVal) {\n"
-        "  const keyword = document.getElementById('search').value.toLowerCase();\n"
-        "  const cat = catVal !== undefined ? catVal : document.getElementById('catFilter').value;\n"
-        "  if (catVal !== undefined) document.getElementById('catFilter').value = catVal;\n"
-        "  const rows = document.querySelectorAll('#fileBody tr');\n"
-        "  rows.forEach(row => {\n"
-        "    const cells = row.querySelectorAll('td');\n"
-        "    if (cells.length < 6) return;\n"
-        "    const fileName = cells[1].textContent.toLowerCase();\n"
-        "    const rowCat = cells[0].textContent.trim();\n"
-        "    const matchKeyword = !keyword || fileName.includes(keyword);\n"
-        "    const matchCat = cat === '\u5168\u90e8' || rowCat.includes(cat);\n"
-        "    row.style.display = (matchKeyword && matchCat) ? '' : 'none';\n"
-        "  });\n"
-        "  document.querySelectorAll('.stat-card').forEach(c => {\n"
-        "    const d = c.getAttribute('data-cat');\n"
-        "    c.classList.toggle('active', d === cat && cat !== '\u5168\u90e8');\n"
-        "    c.classList.toggle('dimmed', cat !== '\u5168\u90e8' && d !== cat);\n"
-        "  });\n"
-        "}\n"
-        "\n"
-        "function openArchiveDir() {\n"
-        "  try {\n"
-        "    var shell = new ActiveXObject('Shell.Application');\n"
-        "    shell.Open('" + ARCHIVE_URL + "');\n"
-        "  } catch(e) {\n"
-        "    alert('\u8bf7\u624b\u52a8\u6253\u5f00\u76ee\u5f55: " + ARCHIVE_DIR + "');\n"
-        "  }\n"
-        "}\n"
-        "\n"
-        "document.addEventListener('DOMContentLoaded', function() {\n"
-        "  document.querySelectorAll('.stat-card').forEach(card => {\n"
-        "    card.addEventListener('click', function() {\n"
-        "      const c = this.getAttribute('data-cat');\n"
-        "      filterTable(c === document.getElementById('catFilter').value ? '\u5168\u90e8' : c);\n"
-        "    });\n"
-        "  });\n"
-        "});\n"
-        "\n"
-        "document.addEventListener('keydown', function(e) {\n"
-        "  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {\n"
-        "    e.preventDefault();\n"
-        "    document.getElementById('search').focus();\n"
-        "  }\n"
-        "});\n"
-        '</script>\n'
-        '</body>\n'
-        '</html>'
+        'var PS=' + str(PAGE_SIZE) + ',vc=0,ar=[];\n'
+        'function doFilter(catVal){\n'
+        '  var kw=document.getElementById("search").value.toLowerCase();\n'
+        '  var cat=catVal!==undefined?catVal:document.getElementById("catFilter").value;\n'
+        '  if(catVal!==undefined)document.getElementById("catFilter").value=catVal;\n'
+        '  ar=document.querySelectorAll("#fileBody tr");\n'
+        '  var vis=[];\n'
+        '  ar.forEach(function(row){\n'
+        '    var cells=row.querySelectorAll("td");\n'
+        '    if(cells.length<6)return;\n'
+        '    var fn=cells[1].textContent.toLowerCase();\n'
+        '    var rc=cells[0].getAttribute("data-cat");\n'
+        '    var mk=!kw||fn.indexOf(kw)>=0;\n'
+        '    var mc=cat==="全部"||rc===cat;\n'
+        '    if(mk&&mc){vis.push(row)}\n'
+        '    row.style.display="none";\n'
+        '  });\n'
+        '  var show=vis.slice(0,PS);\n'
+        '  show.forEach(function(r){r.style.display=""});\n'
+        '  vc=show.length;\n'
+        '  var rem=vis.length-vc;\n'
+        '  var wrap=document.getElementById("loadMoreWrap");\n'
+        '  wrap.style.display=rem>0?"":"none";\n'
+        '  wrap.querySelector("button").textContent="加载更多 ("+rem+" 条)";\n'
+        '  document.querySelectorAll(".stat-card").forEach(function(c){\n'
+        '    var d=c.getAttribute("data-cat");\n'
+        '    c.classList.toggle("active",d===cat&&cat!=="全部");\n'
+        '    c.classList.toggle("dimmed",cat!=="全部"&&d!==cat);\n'
+        '  });\n'
+        '}\n'
+        'function showMore(){\n'
+        '  var kw=document.getElementById("search").value.toLowerCase();\n'
+        '  var cat=document.getElementById("catFilter").value;\n'
+        '  var allHidden=[];\n'
+        '  ar.forEach(function(row){\n'
+        '    if(row.style.display==="none"){\n'
+        '      var cells=row.querySelectorAll("td");\n'
+        '      if(cells.length<6)return;\n'
+        '      var fn=cells[1].textContent.toLowerCase();\n'
+        '      var rc=cells[0].getAttribute("data-cat");\n'
+        '      var mk=!kw||fn.indexOf(kw)>=0;\n'
+        '      var mc=cat==="全部"||rc===cat;\n'
+        '      if(mk&&mc)allHidden.push(row);\n'
+        '    }\n'
+        '  });\n'
+        '  var next=allHidden.slice(0,PS);\n'
+        '  next.forEach(function(r){r.style.display=""});\n'
+        '  vc+=next.length;\n'
+        '  var rem=allHidden.length-next.length;\n'
+        '  var wrap=document.getElementById("loadMoreWrap");\n'
+        '  wrap.style.display=rem>0?"":"none";\n'
+        '  wrap.querySelector("button").textContent="加载更多 ("+rem+" 条)";\n'
+        '}\n'
+        'function openArchiveDir(){\n'
+        '  try{new ActiveXObject("Shell.Application").Open("' + ARCHIVE_URL + '")}catch(e){alert("请手动打开: ' + ARCHIVE_DIR + '")}\n'
+        '}\n'
+        'document.addEventListener("DOMContentLoaded",function(){\n'
+        '  document.querySelectorAll(".stat-card").forEach(function(card){\n'
+        '    card.addEventListener("click",function(){\n'
+        '      var c=this.getAttribute("data-cat");\n'
+        '      doFilter(c===document.getElementById("catFilter").value?"全部":c);\n'
+        '    });\n'
+        '  });\n'
+        '  doFilter();\n'
+        '});\n'
+        'document.addEventListener("keydown",function(e){\n'
+        '  if(e.key==="/"&&document.activeElement.tagName!=="INPUT"){e.preventDefault();document.getElementById("search").focus()}\n'
+        '});\n'
+        'filterTable=doFilter;\n'
+        '</script></body></html>'
     )
 
-    out_path = os.path.join(ARCHIVE_DIR, "index.html")
-    with open(out_path, "w", encoding="utf-8") as f:
+    out = os.path.join(ARCHIVE_DIR, "index.html")
+    with open(out, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Generated: {out_path} ({len(html)} bytes)")
+    print("Generated: %s (%d bytes, %d rows)" % (out, len(html), len(records)))
+
 
 if __name__ == "__main__":
     main()
