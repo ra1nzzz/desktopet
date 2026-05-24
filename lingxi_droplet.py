@@ -661,6 +661,101 @@ def move_to_recycle(filepath):
     from send2trash import send2trash
     send2trash(filepath)
 
+def rebuild_filedb(db_path, archive_dir):
+    """扫描归档目录，重建 filedb.json（用于 EXE 首次启动或目录结构变更后）"""
+    import re as _re
+    _SCREENSHOT_RE = _re.compile(
+        r'^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}'
+        r'|^Screenshot[_\s]'
+        r'|^微信截图'
+        r'|^微信图片_\d{8}'
+        r'|^QQ截图'
+        r'|^屏幕截图'
+        r'|^Snipaste'
+        r'|^截屏'
+        r'|^捕获'
+        r'|^[Cc]apture'
+        r'|^[Ss]creenshot'
+        r'|^clip_'
+        r'|^paste_'
+        r'|^新建 位图图像',
+        _re.IGNORECASE,
+    )
+    _EXT_CAT = {
+        ".png": "图片", ".jpg": "图片", ".jpeg": "图片", ".gif": "图片", ".bmp": "图片",
+        ".webp": "图片", ".svg": "图片", ".ico": "图片", ".tiff": "图片", ".tif": "图片",
+        ".mp4": "视频", ".avi": "视频", ".mkv": "视频", ".mov": "视频", ".wmv": "视频",
+        ".flv": "视频", ".webm": "视频",
+        ".mp3": "音频", ".wav": "音频", ".flac": "音频", ".ogg": "音频", ".aac": "音频",
+        ".m4a": "音频",
+        ".pdf": "文档", ".doc": "文档", ".docx": "文档", ".xls": "文档", ".xlsx": "文档",
+        ".ppt": "文档", ".pptx": "文档", ".txt": "文档", ".csv": "文档", ".md": "文档",
+        ".rtf": "文档",
+        ".zip": "压缩包", ".rar": "压缩包", ".7z": "压缩包", ".tar": "压缩包", ".gz": "压缩包",
+        ".exe": "安装包", ".msi": "安装包",
+        ".py": "代码", ".js": "代码", ".html": "代码", ".css": "代码", ".json": "代码",
+        ".java": "代码", ".cpp": "代码", ".c": "代码", ".h": "代码", ".bat": "代码",
+        ".ps1": "代码", ".sh": "代码",
+        ".psd": "设计稿", ".ai": "设计稿", ".sketch": "设计稿",
+    }
+    _SKIP_NAMES = {"index.html", ".filedb.json"}
+
+    records = []
+    if not os.path.isdir(archive_dir):
+        return records
+
+    for root, dirs, files in os.walk(archive_dir):
+        dirs.sort()
+        for fname in files:
+            if fname in _SKIP_NAMES:
+                continue
+            fpath = os.path.join(root, fname)
+            if not os.path.isfile(fpath):
+                continue
+            try:
+                fsize = os.path.getsize(fpath)
+                md5 = hashlib.md5()
+                with open(fpath, "rb") as _fh:
+                    for chunk in iter(lambda: _fh.read(8192), b""):
+                        md5.update(chunk)
+                name_lower = fname.lower()
+                ext = os.path.splitext(fname)[1].lower()
+                cat = _EXT_CAT.get(ext, "其他")
+                if cat == "图片" and _SCREENSHOT_RE.search(name_lower):
+                    cat = "截图"
+                # 从路径推断分类目录（如 D:\lingxi-file\图片\2026-05\xxx.png）
+                rel = os.path.relpath(fpath, archive_dir)
+                parts = rel.replace("/", "\\").split("\\")
+                if len(parts) >= 2 and parts[0] in (set(_EXT_CAT.values()) | {"截图"}):
+                    dir_cat = parts[0]
+                    if dir_cat == "图片" and _SCREENSHOT_RE.search(name_lower):
+                        cat = "截图"
+                    else:
+                        cat = dir_cat
+                # 文件时间作为日期
+                mtime = os.path.getmtime(fpath)
+                dt = datetime.datetime.fromtimestamp(mtime)
+                records.append({
+                    "timestamp": dt.strftime("%Y%m%d%H%M%S"),
+                    "original_name": fname,
+                    "original_path": fpath,
+                    "category": cat,
+                    "action": "archive",
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "time": dt.strftime("%H:%M:%S"),
+                    "file_size": fsize,
+                    "md5": md5.hexdigest(),
+                    "destination": fpath,
+                })
+            except Exception:
+                pass
+
+    records.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    with open(db_path, "w", encoding="utf-8") as _f:
+        json.dump(records, _f, ensure_ascii=False, indent=2)
+    return records
+
+
 def classify_file(filepath, config):
     ext = os.path.splitext(filepath)[1].lower()
     name = os.path.basename(filepath).lower()
@@ -791,9 +886,36 @@ def main():
     log("  灵犀文件精灵 v7.2 — ULW + windnd")
     log("=" * 60)
     config = load_config()
+    archive_dir = config["archive_dir"]
+    os.makedirs(archive_dir, exist_ok=True)
+
+    # 启动时扫描归档目录，与 filedb.json 比对，缺失的文件自动补录
     db = FileDB(DB_FILE)
+    if os.path.isdir(archive_dir):
+        # 统计归档目录实际文件（排除 index.html 和 .filedb.json）
+        real_files = set()
+        for root, dirs, files in os.walk(archive_dir):
+            for fname in files:
+                if fname in ("index.html", ".filedb.json"):
+                    continue
+                fpath = os.path.join(root, fname)
+                if os.path.isfile(fpath):
+                    real_files.add(fpath)
+        # 统计 filedb 中已归档的文件路径
+        db_files = {r.get("destination", "") for r in db.data if r.get("action") == "archive" and r.get("destination") != "(已回收)"}
+        missing = real_files - db_files
+        extra = db_files - real_files
+        if missing or extra:
+            log(f"[scan] 归档目录变化: {len(missing)} 新增, {len(extra)} 已删除")
+            # 重建 filedb
+            new_data = rebuild_filedb(DB_FILE, archive_dir)
+            db.data = new_data
+            log(f"[scan] filedb 重建完成: {len(new_data)} 条记录")
+        else:
+            log(f"[scan] filedb 与目录一致 ({len(real_files)} 文件)")
+
     register_lingxi_protocol()
-    generate_html_index(db, config["archive_dir"], config)
+    generate_html_index(db, archive_dir, config)
     log(f"  归档目录: {config['archive_dir']}")
     log(f"  导航页面: {HTML_INDEX}")
     log("")
