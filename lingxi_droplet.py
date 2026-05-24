@@ -674,155 +674,25 @@ def register_lingxi_protocol():
         winreg.CloseKey(shell); winreg.CloseKey(key)
     except Exception: pass
 def generate_html_index(db, archive_dir, config):
-    import base64, os
-    CAT_META = {
-        "截图": ("📸", "#ef4444"), "图片": ("🖼️", "#8b5cf6"),
-        "视频": ("🎬", "#ec4899"), "音频": ("🎵", "#f59e0b"),
-        "文档": ("📄", "#3b82f6"), "压缩包": ("📦", "#06b6d4"),
-        "安装包": ("💿", "#6366f1"), "代码": ("💻", "#10b981"),
-        "设计稿": ("🎨", "#d946ef"), "其他": ("📁", "#94a3b8"),
-    }
-    records = sorted(db.data, key=lambda r: r.get("timestamp", ""), reverse=True)
-    total_size = sum(r.get("file_size", 0) for r in records)
-    if total_size > 1048576: total_str = f"{total_size/1048576:.1f} MB"
-    elif total_size > 1024: total_str = f"{total_size/1024:.1f} KB"
-    else: total_str = f"{total_size} B"
-    cats = {}
-    for rec in records:
-        c = rec.get("category", "其他")
-        if c not in cats: cats[c] = {"count": 0, "size": 0}
-        cats[c]["count"] += 1
-        cats[c]["size"] += rec.get("file_size", 0)
+    gen_py = os.path.join(SCRIPT_DIR, "_gen_html.py")
+    if os.path.exists(gen_py):
+        env = os.environ.copy()
+        clean = []
+        for p in env.get("PATH", "").split(";"):
+            if "wps" not in p.lower():
+                clean.append(p)
+        env["PATH"] = ";".join(clean)
+        env.pop("PYTHONHOME", None)
+        env.pop("PYTHONPATH", None)
+        try:
+            subprocess.run([r"C:\Program Files\Python312\python.exe", gen_py],
+                         capture_output=True, timeout=30, env=env)
+            if os.path.exists(os.path.join(archive_dir, "index.html")):
+                with open(os.path.join(archive_dir, "index.html"), "r", encoding="utf-8") as _f:
+                    return _f.read()
+        except Exception: pass
+    return "<html><body><p>HTML generation failed</p></body></html>"
 
-    stat_cards = ""
-    for cat_name, info in sorted(cats.items(), key=lambda x: -x[1]["count"]):
-        emoji, color = CAT_META.get(cat_name, ("📁", "#94a3b8"))
-        sz = info["size"]
-        if sz > 1048576: sz_s = f"{sz/1048576:.1f} MB"
-        elif sz > 1024: sz_s = f"{sz/1024:.1f} KB"
-        else: sz_s = f"{sz} B"
-        stat_cards += '<div class="stat-card" style="border-left: 3px solid ' + color + '"><div class="stat-icon">' + emoji + '</div><div class="stat-info"><div class="stat-name">' + cat_name + '</div><div class="stat-detail">' + str(info["count"]) + ' \u4e2a\u6587\u4ef6 \xb7 ' + sz_s + '</div></div></div>\n'
-
-    cat_options = ""
-    for cat_name, info in sorted(cats.items(), key=lambda x: -x[1]["count"]):
-        emoji, _ = CAT_META.get(cat_name, ("📁", "#94a3b8"))
-        cat_options += '<option value="' + cat_name + '">' + emoji + ' ' + cat_name + ' (' + str(info["count"]) + ')</option>\n'
-
-    rows_html = ""
-    for rec in records[:500]:
-        cat = rec.get("category", "其他")
-        name = rec.get("original_name", "")
-        date = rec.get("date", "")
-        action = rec.get("action", "")
-        dest = rec.get("destination", "")
-        sz = rec.get("file_size", 0)
-        if sz > 1048576: sz_s = f"{sz/1048576:.1f} MB"
-        elif sz > 1024: sz_s = f"{sz/1024:.1f} KB"
-        else: sz_s = f"{sz} B"
-        emoji, color = CAT_META.get(cat, ("📁", "#94a3b8"))
-        badge_cls = "badge-recycle" if action == "recycle" else "badge-archive"
-        badge_txt = "\u5df2\u56de\u6536" if action == "recycle" else "\u5df2\u5f52\u6863"
-        path_short = os.path.basename(dest) if dest and dest != "(\u5df2\u56de\u6536)" else "(\u5df2\u56de\u6536)"
-        locate_btn = ""
-        if dest and dest != "(\u5df2\u56de\u6536)" and action == "archive":
-            encoded = base64.b64encode(dest.encode("utf-8")).decode("ascii")
-            locate_btn = ' <a class="btn-locate" href="lingxi-locate://' + encoded + '" title="\u5b9a\u4f4d">\u5b9a\u4f4d</a>'
-        rows_html += '<tr><td><span class="cat-dot" style="background:' + color + '"></span> ' + emoji + ' ' + cat + '</td>'
-        rows_html += '<td title="' + name + '">' + name + '</td><td>' + date + '</td><td>' + sz_s + '</td>'
-        rows_html += '<td><span class="badge ' + badge_cls + '">' + badge_txt + '</span>' + locate_btn + '</td>'
-        rows_html += '<td class="path-cell" title="' + dest + '">' + path_short + '</td></tr>\n'
-
-    archive_url = archive_dir.replace(os.sep, "/")
-    html = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>\u7075\u7280\u6587\u4ef6\u7cbe\u7075 - \u6587\u4ef6\u5bfc\u822a</title>
-<style>
-  :root { --bg: #0f1117; --bg2: #1a1d27; --bg3: #242837; --fg: #e2e8f0; --fg2: #94a3b8; --accent: #6366f1; --accent2: #818cf8; --border: #2d3348; --radius: 12px; }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; min-height: 100vh; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
-  .header { text-align: center; margin-bottom: 40px; padding: 40px 0; background: linear-gradient(135deg, var(--bg2), var(--bg3)); border-radius: var(--radius); border: 1px solid var(--border); }
-  .header h1 { font-size: 32px; font-weight: 700; background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
-  .header p { color: var(--fg2); font-size: 14px; }
-  .summary { display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
-  .summary-card { flex: 1; min-width: 180px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; }
-  .summary-card .num { font-size: 36px; font-weight: 800; color: var(--accent2); }
-  .summary-card .label { color: var(--fg2); font-size: 13px; margin-top: 4px; }
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 32px; }
-  .stat-card { display: flex; align-items: center; gap: 14px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; transition: transform 0.15s, box-shadow 0.15s; }
-  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
-  .stat-icon { font-size: 28px; }
-  .stat-name { font-weight: 600; font-size: 15px; }
-  .stat-detail { color: var(--fg2); font-size: 12px; }
-  .toolbar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
-  .toolbar input, .toolbar select { background: var(--bg2); border: 1px solid var(--border); color: var(--fg); padding: 10px 16px; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
-  .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
-  .toolbar input { flex: 1; min-width: 200px; }
-  .toolbar select { min-width: 160px; cursor: pointer; }
-  .toolbar .btn { padding: 10px 20px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.2s; }
-  .toolbar .btn:hover { background: var(--accent2); }
-  .table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: var(--bg3); padding: 14px 16px; text-align: left; font-weight: 600; font-size: 13px; color: var(--fg2); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
-  td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--border); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(99, 102, 241, 0.06); }
-  .cat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .badge-archive { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-  .badge-recycle { background: rgba(239, 68, 68, 0.15); color: #f87171; }
-  .btn-locate { color: var(--accent2); text-decoration: none; margin-left: 6px; padding: 2px 8px; border: 1px solid var(--accent); border-radius: 4px; font-size: 11px; cursor: pointer; }
-  .btn-locate:hover { background: var(--accent); color: #fff; }
-  .path-cell { color: var(--fg2); font-size: 12px; }
-  .footer { text-align: center; margin-top: 48px; padding: 24px 0; color: var(--fg2); font-size: 12px; border-top: 1px solid var(--border); }
-  @media (max-width: 768px) { .summary { flex-direction: column; } .stats-grid { grid-template-columns: 1fr; } .toolbar { flex-direction: column; } .toolbar input, .toolbar select { width: 100%; } th, td { padding: 10px 12px; font-size: 13px; } }
-</style>
-</head>
-<body>
-<div class="container">
-  <div class="header"><h1>\u7075\u7280\u6587\u4ef6\u7cbe\u7075</h1><p>\u667a\u80fd\u6587\u4ef6\u5206\u7c7b\u5f52\u6863 \xb7 \u62d6\u62fd\u5373\u6574\u7406</p></div>
-  <div class="summary">
-    <div class="summary-card"><div class="num">""" + str(len(records)) + """</div><div class="label">\u7d2f\u8ba1\u5904\u7406\u6587\u4ef6</div></div>
-    <div class="summary-card"><div class="num">""" + str(len(cats)) + """</div><div class="label">\u6587\u4ef6\u5206\u7c7b\u6570</div></div>
-    <div class="summary-card"><div class="num">""" + total_str + """</div><div class="label">\u5f52\u6863\u603b\u5927\u5c0f</div></div>
-  </div>
-  <div class="stats-grid">""" + stat_cards + """</div>
-  <div class="toolbar">
-    <input type="text" id="search" placeholder="\u641c\u7d22\u6587\u4ef6\u540d..." oninput="filterTable()">
-    <select id="catFilter" onchange="filterTable()"><option value="\u5168\u90e8">\u5168\u90e8\u5206\u7c7b</option>""" + cat_options + """</select>
-    <button class="btn" onclick="location.reload()">\u5237\u65b0</button>
-    <button class="btn" style="background:transparent;border-color:var(--border);color:var(--fg2)" onclick="openArchiveDir()">\u6253\u5f00\u5f52\u6863\u76ee\u5f55</button>
-  </div>
-  <div class="table-wrap"><table>
-    <thead><tr><th>\u5206\u7c7b</th><th>\u6587\u4ef6\u540d</th><th>\u65e5\u671f</th><th>\u5927\u5c0f</th><th>\u64cd\u4f5c</th><th>\u5f52\u6863\u8def\u5f84</th></tr></thead>
-    <tbody id="fileBody">""" + rows_html + """</tbody>
-  </table></div>
-  <div class="footer">\u7075\u7280\u6587\u4ef6\u7cbe\u7075 \xb7 LingXi Droplet \xb7 \u6570\u636e\u5b58\u50a8\u4e8e\u672c\u5730 """ + archive_dir + """</div>
-</div>
-<script>
-function filterTable() {
-  var kw = document.getElementById("search").value.toLowerCase();
-  var cat = document.getElementById("catFilter").value;
-  document.querySelectorAll("#fileBody tr").forEach(function(row) {
-    var cells = row.querySelectorAll("td");
-    if (cells.length < 6) return;
-    var fn = cells[1].textContent.toLowerCase();
-    var rc = cells[0].textContent.trim();
-    row.style.display = ((!kw || fn.indexOf(kw) >= 0) && (cat === "\u5168\u90e8" || rc.indexOf(cat) === 0)) ? "" : "none";
-  });
-}
-function openArchiveDir() {
-  try { new ActiveXObject("Shell.Application").Open(""" + archive_url + """"); } catch(e) { alert("Please open: """ + archive_dir + """"); }
-}
-document.addEventListener("keydown", function(e) {
-  if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); document.getElementById("search").focus(); }
-});
-</script>
-</body></html>"""
-    return html
 def load_config():
     default = {"archive_dir": r"D:\lingxi-file", "temp_dir": r"D:\lingxi-temp", "window_position": None}
     if os.path.exists(CONFIG_FILE):
