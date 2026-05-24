@@ -11,7 +11,13 @@ import tkinter as tk
 from PIL import Image, ImageDraw, ImageFont
 import windnd
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+def _app_dir():
+    """获取应用根目录（兼容 PyInstaller 打包）"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+SCRIPT_DIR = _app_dir()
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -676,12 +682,18 @@ def register_lingxi_protocol():
                 _f.write("p=base64.b64decode(u).decode('utf-8')\n")
                 _f.write("subprocess.Popen(['explorer','/select,',p])\n")
         if not os.path.exists(bat):
-            with open(bat, "w") as _f:
-                _f.write('@echo off\n')
-                _f.write('set PATH=C:\\Program Files\\Python312;C:\\Program Files\\Python312\\Scripts;%SystemRoot%\\System32;%SystemRoot%\n')
-                _f.write('set PYTHONHOME=\n')
-                _f.write('set PYTHONPATH=\n')
-                _f.write('"C:\\Program Files\\Python312\\python.exe" "%~dp0_locate.py" "%~1"\n')
+            if getattr(sys, 'frozen', False):
+                # EXE 模式：直接调用自身
+                with open(bat, "w") as _f:
+                    _f.write('@echo off\n')
+                    _f.write('"%~dp0' + os.path.basename(sys.executable) + '" --locate "%~1"\n')
+            else:
+                with open(bat, "w") as _f:
+                    _f.write('@echo off\n')
+                    _f.write('set PATH=C:\\Program Files\\Python312;C:\\Program Files\\Python312\\Scripts;%SystemRoot%\\System32;%SystemRoot%\n')
+                    _f.write('set PYTHONHOME=\n')
+                    _f.write('set PYTHONPATH=\n')
+                    _f.write('"C:\\Program Files\\Python312\\python.exe" "%~dp0_locate.py" "%~1"\n')
         key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\lingxi-locate")
         winreg.SetValue(key, None, winreg.REG_SZ, "URL:lingxi-locate Protocol")
         winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
@@ -692,21 +704,23 @@ def register_lingxi_protocol():
 def generate_html_index(db, archive_dir, config):
     gen_py = os.path.join(SCRIPT_DIR, "_gen_html.py")
     if os.path.exists(gen_py):
-        env = os.environ.copy()
-        clean = []
-        for p in env.get("PATH", "").split(";"):
-            if "wps" not in p.lower():
-                clean.append(p)
-        env["PATH"] = ";".join(clean)
-        env.pop("PYTHONHOME", None)
-        env.pop("PYTHONPATH", None)
         try:
-            subprocess.run([r"C:\Program Files\Python312\python.exe", gen_py],
-                         capture_output=True, timeout=30, env=env)
-            if os.path.exists(os.path.join(archive_dir, "index.html")):
-                with open(os.path.join(archive_dir, "index.html"), "r", encoding="utf-8") as _f:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("_gen_html", gen_py)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            # 加载后覆盖路径配置（模块级代码已设置默认值）
+            mod.DB_FILE = os.path.join(SCRIPT_DIR, "filedb.json")
+            mod.ARCHIVE_DIR = archive_dir
+            mod.ARCHIVE_URL = archive_dir.replace("\\", "/")
+            mod.SCRIPT_DIR = SCRIPT_DIR
+            mod.main()
+            out = os.path.join(archive_dir, "index.html")
+            if os.path.exists(out):
+                with open(out, "r", encoding="utf-8") as _f:
                     return _f.read()
-        except Exception: pass
+        except Exception as e:
+            log(f"[warn] HTML generation failed: {e}")
     return "<html><body><p>HTML generation failed</p></body></html>"
 
 def load_config():
@@ -746,6 +760,15 @@ class FileDB:
 
 def main():
     import traceback
+
+    # --locate 模式：用于 lingxi-locate:// 协议定位文件
+    if len(sys.argv) > 1 and sys.argv[1] == "--locate":
+        import base64
+        u = sys.argv[2].replace("lingxi-locate://", "")
+        p = base64.b64decode(u).decode("utf-8")
+        subprocess.Popen(["explorer", "/select,", p])
+        return
+
     log("=" * 60)
     log("  灵犀文件精灵 v7.2 — ULW + windnd")
     log("=" * 60)
