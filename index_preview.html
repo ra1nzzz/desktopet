@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灵犀文件精灵 - 文件导航</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #1a1d27;
+    --bg3: #242837;
+    --fg: #e2e8f0;
+    --fg2: #94a3b8;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --border: #2d3348;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 40px 0;
+    background: linear-gradient(135deg, var(--bg2), var(--bg3));
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header p { color: var(--fg2); font-size: 14px; }
+
+  /* Summary */
+  .summary {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .summary-card {
+    flex: 1;
+    min-width: 180px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+  }
+  .summary-card .num {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--accent2);
+  }
+  .summary-card .label { color: var(--fg2); font-size: 13px; margin-top: 4px; }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .stat-icon { font-size: 28px; }
+  .stat-name { font-weight: 600; font-size: 15px; }
+  .stat-detail { color: var(--fg2); font-size: 12px; }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .toolbar input, .toolbar select {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .toolbar input:focus, .toolbar select:focus {
+    border-color: var(--accent);
+  }
+  .toolbar input { flex: 1; min-width: 200px; }
+  .toolbar select { min-width: 160px; cursor: pointer; }
+  .toolbar .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+  .toolbar .btn:hover { background: var(--accent2); }
+
+  /* Table */
+  .table-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    background: var(--bg3);
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--fg2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(99, 102, 241, 0.06); }
+  .cat-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge-archive { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+  .badge-recycle { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+  .path-cell { color: var(--fg2); font-size: 12px; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--fg2);
+  }
+  .empty .icon { font-size: 48px; margin-bottom: 16px; }
+  .empty p { font-size: 15px; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 48px;
+    padding: 24px 0;
+    color: var(--fg2);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .summary { flex-direction: column; }
+    .stats-grid { grid-template-columns: 1fr; }
+    .toolbar { flex-direction: column; }
+    .toolbar input, .toolbar select { width: 100%; }
+    th, td { padding: 10px 12px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>灵犀文件精灵</h1>
+    <p>智能文件分类归档 · 拖拽即整理</p>
+  </div>
+
+  <div class="summary">
+    <div class="summary-card">
+      <div class="num">7</div>
+      <div class="label">累计处理文件</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">6</div>
+      <div class="label">文件分类数</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">71.5 MB</div>
+      <div class="label">归档总大小</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    
+        <div class="stat-card" style="border-left: 3px solid #ef4444">
+            <div class="stat-icon">📸</div>
+            <div class="stat-info">
+                <div class="stat-name">截图</div>
+                <div class="stat-detail">2 个文件 · 1.5 MB</div>
+            </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid #3b82f6">
+            <div class="stat-icon">📄</div>
+            <div class="stat-info">
+                <div class="stat-name">文档</div>
+                <div class="stat-detail">1 个文件 · 3.0 MB</div>
+            </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid #8b5cf6">
+            <div class="stat-icon">🖼️</div>
+            <div class="stat-info">
+                <div class="stat-name">图片</div>
+                <div class="stat-detail">1 个文件 · 2.0 MB</div>
+            </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid #f59e0b">
+            <div class="stat-icon">🎵</div>
+            <div class="stat-info">
+                <div class="stat-name">音频</div>
+                <div class="stat-detail">1 个文件 · 15.0 MB</div>
+            </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid #10b981">
+            <div class="stat-icon">💻</div>
+            <div class="stat-info">
+                <div class="stat-name">代码</div>
+                <div class="stat-detail">1 个文件 · 0.0 MB</div>
+            </div>
+        </div>
+        <div class="stat-card" style="border-left: 3px solid #d946ef">
+            <div class="stat-icon">🎨</div>
+            <div class="stat-info">
+                <div class="stat-name">设计稿</div>
+                <div class="stat-detail">1 个文件 · 50.0 MB</div>
+            </div>
+        </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="搜索文件名..." oninput="filterTable()">
+    <select id="catFilter" onchange="filterTable()">
+      <option value="全部">全部分类</option><option value="代码">💻 代码 (1)</option><option value="图片">🖼️ 图片 (1)</option><option value="截图">📸 截图 (2)</option><option value="文档">📄 文档 (1)</option><option value="设计稿">🎨 设计稿 (1)</option><option value="音频">🎵 音频 (1)</option>
+    </select>
+    <button class="btn" onclick="location.reload()">刷新</button>
+    <button class="btn" style="background:transparent;border-color:var(--border);color:var(--fg2)" onclick="openArchiveDir()">打开归档目录</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>分类</th>
+          <th>文件名</th>
+          <th>日期</th>
+          <th>大小</th>
+          <th>操作</th>
+          <th>归档路径</th>
+        </tr>
+      </thead>
+      <tbody id="fileBody">
+        
+        <tr>
+            <td><span class="cat-dot" style="background:#d946ef"></span> 🎨 设计稿</td>
+            <td title="设计稿v3.psd">设计稿v3.psd</td>
+            <td>2026-05-20</td>
+            <td>50.00 MB</td>
+            <td><span class="badge badge-archive">已归档</span></td>
+            <td class="path-cell" title="D:/lingxi-file/设计稿/2026-05/设计稿v3.psd">设计稿v3.psd</td>
+        </tr>
+        <tr>
+            <td><span class="cat-dot" style="background:#10b981"></span> 💻 代码</td>
+            <td title="deploy.py">deploy.py</td>
+            <td>2026-05-20</td>
+            <td>4.0 KB</td>
+            <td><span class="badge badge-archive">已归档</span></td>
+            <td class="path-cell" title="D:/lingxi-file/代码/2026-05/deploy.py">deploy.py</td>
+        </tr>
+        <tr>
+            <td><span class="cat-dot" style="background:#f59e0b"></span> 🎵 音频</td>
+            <td title="会议录音.mp3">会议录音.mp3</td>
+            <td>2026-05-20</td>
+            <td>15.00 MB</td>
+            <td><span class="badge badge-archive">已归档</span></td>
+            <td class="path-cell" title="D:/lingxi-file/音频/2026-05/会议录音.mp3">会议录音.mp3</td>
+        </tr>
+        <tr>
+            <td><span class="cat-dot" style="background:#8b5cf6"></span> 🖼️ 图片</td>
+            <td title="产品原型.png">产品原型.png</td>
+            <td>2026-05-20</td>
+            <td>2.00 MB</td>
+            <td><span class="badge badge-archive">已归档</span></td>
+            <td class="path-cell" title="D:/lingxi-file/图片/2026-05/产品原型.png">产品原型.png</td>
+        </tr>
+        <tr>
+            <td><span class="cat-dot" style="background:#3b82f6"></span> 📄 文档</td>
+            <td title="Q2季度报告.docx">Q2季度报告.docx</td>
+            <td>2026-05-20</td>
+            <td>3.00 MB</td>
+            <td><span class="badge badge-archive">已归档</span></td>
+            <td class="path-cell" title="D:/lingxi-file/文档/2026-05/Q2季度报告.docx">Q2季度报告.docx</td>
+        </tr>
+        <tr>
+            <td><span class="cat-dot" style="background:#ef4444"></span> 📸 截图</td>
+            <td title="Screenshot_20260520.png">Screenshot_20260520.png</td>
+            <td>2026-05-20</td>
+            <td>1.00 MB</td>
+            <td><span class="badge badge-recycle">已回收</span></td>
+            <td class="path-cell" title="(已回收)">(已回收)</td>
+        </tr>
+        <tr>
+            <td><span class="cat-dot" style="background:#ef4444"></span> 📸 截图</td>
+            <td title="微信截图_20260520123456.png">微信截图_20260520123456.png</td>
+            <td>2026-05-20</td>
+            <td>0.50 MB</td>
+            <td><span class="badge badge-recycle">已回收</span></td>
+            <td class="path-cell" title="(已回收)">(已回收)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    灵犀文件精灵 · LingXi Droplet · 数据存储于本地 D:\lingxi-file
+  </div>
+
+</div>
+
+<script>
+function filterTable() {
+  const keyword = document.getElementById('search').value.toLowerCase();
+  const cat = document.getElementById('catFilter').value;
+  const rows = document.querySelectorAll('#fileBody tr');
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 6) return;
+    const fileName = cells[1].textContent.toLowerCase();
+    const rowCat = cells[0].textContent.trim();
+    const matchKeyword = !keyword || fileName.includes(keyword);
+    const matchCat = cat === '全部' || rowCat.startsWith(cat);
+    row.style.display = (matchKeyword && matchCat) ? '' : 'none';
+  });
+}
+
+function openArchiveDir() {
+  // 尝试打开文件管理器
+  try {
+    // Windows
+    var shell = new ActiveXObject('Shell.Application');
+    shell.Open('D:\lingxi-file'.replace(/\\/g, '\\'));
+  } catch(e) {
+    alert('请手动打开目录: D:\lingxi-file');
+  }
+}
+
+// 自动聚焦搜索框 (按 / 键)
+document.addEventListener('keydown', function(e) {
+  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
+});
+</script>
+</body>
+</html>

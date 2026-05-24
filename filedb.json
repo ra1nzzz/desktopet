@@ -1,0 +1,50 @@
+[
+  {
+    "timestamp": "20260525001754712790",
+    "original_name": "2026_05_24_02_20_36.png",
+    "original_path": "C:\\Users\\和旭电商\\Desktop\\2026_05_24_02_20_36.png",
+    "category": "图片",
+    "action": "archive",
+    "date": "2026-05-25",
+    "time": "00:17:54",
+    "file_size": 45933,
+    "md5": "ef650f7cea441ca16129036921c34975",
+    "destination": "D:\\lingxi-file\\图片\\2026-05\\2026_05_24_02_20_36.png"
+  },
+  {
+    "timestamp": "20260525002307193509",
+    "original_name": "2026_05_24_02_33_13.png",
+    "original_path": "C:\\Users\\和旭电商\\Desktop\\2026_05_24_02_33_13.png",
+    "category": "图片",
+    "action": "archive",
+    "date": "2026-05-25",
+    "time": "00:23:07",
+    "file_size": 82707,
+    "md5": "0823c2455d6f4ad28bb9019f4b48000f",
+    "destination": "D:\\lingxi-file\\图片\\2026-05\\2026_05_24_02_33_13.png"
+  },
+  {
+    "timestamp": "20260525002525066221",
+    "original_name": "2026_05_24_18_14_31.png",
+    "original_path": "C:\\Users\\和旭电商\\Desktop\\2026_05_24_18_14_31.png",
+    "category": "图片",
+    "action": "archive",
+    "date": "2026-05-25",
+    "time": "00:25:25",
+    "file_size": 52912,
+    "md5": "16ef4c2f6ac96e7bd8d71fe3af06628d",
+    "destination": "D:\\lingxi-file\\图片\\2026-05\\2026_05_24_18_14_31.png"
+  },
+  {
+    "timestamp": "20260525002847262484",
+    "original_name": "fix-clipboard.ps1",
+    "original_path": "C:\\Users\\和旭电商\\Desktop\\fix-clipboard.ps1",
+    "category": "其他",
+    "action": "archive",
+    "date": "2026-05-25",
+    "time": "00:28:47",
+    "file_size": 3319,
+    "md5": "a0c8376d7b6d27a3bf012cfd3d658ece",
+    "destination": "D:\\lingxi-file\\其他\\2026-05\\fix-clipboard.ps1"
+  }
+]

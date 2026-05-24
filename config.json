@@ -1,0 +1,149 @@
+{
+  "archive_dir": "D:\\lingxi-file",
+  "temp_dir": "D:\\lingxi-temp",
+  "window_position": [
+    1243,
+    765
+  ],
+  "categories": {
+    "截图": {
+      "exts": [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".bmp",
+        ".gif",
+        ".webp",
+        ".tiff"
+      ],
+      "action": "recycle"
+    },
+    "文档": {
+      "exts": [
+        ".doc",
+        ".docx",
+        ".pdf",
+        ".txt",
+        ".rtf",
+        ".odt",
+        ".md",
+        ".csv",
+        ".xlsx",
+        ".xls",
+        ".ppt",
+        ".pptx"
+      ],
+      "action": "archive"
+    },
+    "图片": {
+      "exts": [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".bmp",
+        ".gif",
+        ".webp",
+        ".tiff",
+        ".svg",
+        ".ico"
+      ],
+      "action": "archive"
+    },
+    "视频": {
+      "exts": [
+        ".mp4",
+        ".avi",
+        ".mkv",
+        ".mov",
+        ".wmv",
+        ".flv",
+        ".webm"
+      ],
+      "action": "archive"
+    },
+    "音频": {
+      "exts": [
+        ".mp3",
+        ".wav",
+        ".flac",
+        ".aac",
+        ".ogg",
+        ".wma",
+        ".m4a"
+      ],
+      "action": "archive"
+    },
+    "代码": {
+      "exts": [
+        ".py",
+        ".js",
+        ".ts",
+        ".html",
+        ".css",
+        ".json",
+        ".xml",
+        ".java",
+        ".cpp",
+        ".c",
+        ".h",
+        ".go",
+        ".rs",
+        ".rb",
+        ".php",
+        ".sh",
+        ".bat",
+        ".ps1",
+        ".sql",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg"
+      ],
+      "action": "archive"
+    },
+    "压缩包": {
+      "exts": [
+        ".zip",
+        ".rar",
+        ".7z",
+        ".tar",
+        ".gz",
+        ".bz2"
+      ],
+      "action": "archive"
+    },
+    "安装包": {
+      "exts": [
+        ".exe",
+        ".msi",
+        ".dmg",
+        ".deb",
+        ".rpm",
+        ".appimage"
+      ],
+      "action": "archive"
+    },
+    "设计稿": {
+      "exts": [
+        ".psd",
+        ".ai",
+        ".sketch",
+        ".fig",
+        ".xd",
+        ".eps"
+      ],
+      "action": "archive"
+    },
+    "电子书": {
+      "exts": [
+        ".epub",
+        ".mobi",
+        ".azw",
+        ".azw3",
+        ".djvu"
+      ],
+      "action": "archive"
+    }
+  }
+}

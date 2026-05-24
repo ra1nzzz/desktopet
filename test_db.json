@@ -1,0 +1,88 @@
+[
+  {
+    "timestamp": "20260520150001",
+    "original_name": "微信截图_20260520123456.png",
+    "original_path": "C:\\Users\\Desktop\\微信截图.png",
+    "category": "截图",
+    "action": "recycle",
+    "date": "2026-05-20",
+    "time": "15:00:01",
+    "file_size": 524288,
+    "md5": "abc123",
+    "destination": "(已回收)",
+    "recycled": true
+  },
+  {
+    "timestamp": "20260520150002",
+    "original_name": "Screenshot_20260520.png",
+    "original_path": "C:\\Users\\Desktop\\Screenshot.png",
+    "category": "截图",
+    "action": "recycle",
+    "date": "2026-05-20",
+    "time": "15:00:02",
+    "file_size": 1048576,
+    "md5": "def456",
+    "destination": "(已回收)",
+    "recycled": true
+  },
+  {
+    "timestamp": "20260520150003",
+    "original_name": "Q2季度报告.docx",
+    "original_path": "C:\\Users\\Downloads\\Q2季度报告.docx",
+    "category": "文档",
+    "action": "archive",
+    "date": "2026-05-20",
+    "time": "15:00:03",
+    "file_size": 3145728,
+    "md5": "ghi789",
+    "destination": "D:\\lingxi-file\\文档\\2026-05\\Q2季度报告.docx"
+  },
+  {
+    "timestamp": "20260520150004",
+    "original_name": "产品原型.png",
+    "original_path": "C:\\Users\\Desktop\\产品原型.png",
+    "category": "图片",
+    "action": "archive",
+    "date": "2026-05-20",
+    "time": "15:00:04",
+    "file_size": 2097152,
+    "md5": "jkl012",
+    "destination": "D:\\lingxi-file\\图片\\2026-05\\产品原型.png"
+  },
+  {
+    "timestamp": "20260520150005",
+    "original_name": "会议录音.mp3",
+    "original_path": "C:\\Users\\Downloads\\会议录音.mp3",
+    "category": "音频",
+    "action": "archive",
+    "date": "2026-05-20",
+    "time": "15:00:05",
+    "file_size": 15728640,
+    "md5": "mno345",
+    "destination": "D:\\lingxi-file\\音频\\2026-05\\会议录音.mp3"
+  },
+  {
+    "timestamp": "20260520150006",
+    "original_name": "deploy.py",
+    "original_path": "C:\\Users\\code\\deploy.py",
+    "category": "代码",
+    "action": "archive",
+    "date": "2026-05-20",
+    "time": "15:00:06",
+    "file_size": 4096,
+    "md5": "pqr678",
+    "destination": "D:\\lingxi-file\\代码\\2026-05\\deploy.py"
+  },
+  {
+    "timestamp": "20260520150007",
+    "original_name": "设计稿v3.psd",
+    "original_path": "C:\\Users\\Desktop\\设计稿v3.psd",
+    "category": "设计稿",
+    "action": "archive",
+    "date": "2026-05-20",
+    "time": "15:00:07",
+    "file_size": 52428800,
+    "md5": "stu901",
+    "destination": "D:\\lingxi-file\\设计稿\\2026-05\\设计稿v3.psd"
+  }
+]
