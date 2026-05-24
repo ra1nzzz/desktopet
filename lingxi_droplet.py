@@ -781,7 +781,7 @@ def main():
 
     # --locate 模式：用于 lingxi-locate:// 协议定位文件
     if len(sys.argv) > 1 and sys.argv[1] == "--locate":
-        import base64
+        import base64, subprocess
         u = sys.argv[2].replace("lingxi-locate://", "")
         p = base64.b64decode(u).decode("utf-8")
         subprocess.Popen(["explorer", "/select,", p])
