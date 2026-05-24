@@ -124,6 +124,14 @@ SCREENSHOT_RE = re.compile(
     re.IGNORECASE,
 )
 
+def _premultiply_alpha(im):
+    """将 RGBA 直通 alpha 转为预乘 alpha，消除半透明边缘的白边"""
+    r, g, b, a = im.split()
+    r = ImageMath.unsafe_eval('convert(R * A / 255, "I")', R=r, A=a).convert('L')
+    g = ImageMath.unsafe_eval('convert(G * A / 255, "I")', G=g, A=a).convert('L')
+    b = ImageMath.unsafe_eval('convert(B * A / 255, "I")', B=b, A=a).convert('L')
+    return Image.merge("RGBA", (r, g, b, a))
+
 class ApngLoader:
     def __init__(self, scale=1.0):
         self._cache = {}
@@ -132,6 +140,7 @@ class ApngLoader:
     def preload(self, state, filepath):
         if state in self._cache:
             return
+        from PIL import ImageMath
         img = Image.open(filepath)
         n = getattr(img, "n_frames", 1)
         frames = []
@@ -142,6 +151,9 @@ class ApngLoader:
                 w = int(frame.width * self._scale)
                 h = int(frame.height * self._scale)
                 frame = frame.resize((w, h), Image.LANCZOS)
+            # 预乘 alpha：消除 ULW (AC_SRC_ALPHA) 下的白色边缘锯齿
+            # 必须在 resize 之后做，否则插值会破坏预乘关系
+            frame = _premultiply_alpha(frame)
             frames.append(frame)
         self._cache[state] = frames
         log(f"[preload] {os.path.basename(filepath)}: {n} frames")
