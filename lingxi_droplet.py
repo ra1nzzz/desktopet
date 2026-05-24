@@ -8,7 +8,7 @@ import os, sys, json, shutil, hashlib, datetime, webbrowser, math, time, random,
 import ctypes
 from ctypes import wintypes
 import tkinter as tk
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageMath
 import windnd
 
 def _app_dir():
@@ -140,7 +140,6 @@ class ApngLoader:
     def preload(self, state, filepath):
         if state in self._cache:
             return
-        from PIL import ImageMath
         img = Image.open(filepath)
         n = getattr(img, "n_frames", 1)
         frames = []
