@@ -12,12 +12,19 @@ from PIL import Image, ImageDraw, ImageFont
 import windnd
 
 def _app_dir():
-    """获取应用根目录（兼容 PyInstaller 打包）"""
+    """用户数据目录（config.json / filedb.json / logs / locate.bat 等读写文件）"""
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
 
+def _bundle_dir():
+    """内置资源目录（assets/ / _gen_html.py 等打包附带的只读文件）"""
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
 SCRIPT_DIR = _app_dir()
+BUNDLE_DIR = _bundle_dir()
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -31,7 +38,7 @@ def log(msg):
     except Exception:
         pass
 
-ASSETS_DIR = os.path.join(SCRIPT_DIR, "assets")
+ASSETS_DIR = os.path.join(BUNDLE_DIR, "assets")
 HTML_INDEX = r"D:\lingxi-file\index.html"
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DB_FILE = os.path.join(SCRIPT_DIR, "filedb.json")
@@ -702,7 +709,7 @@ def register_lingxi_protocol():
         winreg.CloseKey(shell); winreg.CloseKey(key)
     except Exception: pass
 def generate_html_index(db, archive_dir, config):
-    gen_py = os.path.join(SCRIPT_DIR, "_gen_html.py")
+    gen_py = os.path.join(BUNDLE_DIR, "_gen_html.py")
     if os.path.exists(gen_py):
         try:
             import importlib.util
@@ -713,7 +720,7 @@ def generate_html_index(db, archive_dir, config):
             mod.DB_FILE = os.path.join(SCRIPT_DIR, "filedb.json")
             mod.ARCHIVE_DIR = archive_dir
             mod.ARCHIVE_URL = archive_dir.replace("\\", "/")
-            mod.SCRIPT_DIR = SCRIPT_DIR
+            mod.SCRIPT_DIR = BUNDLE_DIR
             mod.main()
             out = os.path.join(archive_dir, "index.html")
             if os.path.exists(out):
